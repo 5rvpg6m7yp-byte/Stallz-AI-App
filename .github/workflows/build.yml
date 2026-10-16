@@ -1,0 +1,87 @@
+name: Build APK
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.9
+      - name: Create Android project
+        run: |
+          mkdir -p android/app/src/main/assets android/app/src/main/java/com/gulffireshield/app
+          cp index.html android/app/src/main/assets/index.html
+          cat > android/settings.gradle <<'EOT'
+          pluginManagement {
+              repositories { google(); mavenCentral(); gradlePluginPortal() }
+          }
+          dependencyResolutionManagement {
+              repositories { google(); mavenCentral() }
+          }
+          rootProject.name = "GulfFireShield"
+          include ':app'
+          EOT
+          cat > android/build.gradle <<'EOT'
+          plugins { id 'com.android.application' version '8.5.2' apply false }
+          EOT
+          cat > android/app/build.gradle <<'EOT'
+          plugins { id 'com.android.application' }
+          android {
+              namespace 'com.gulffireshield.app'
+              compileSdk 34
+              defaultConfig {
+                  applicationId 'com.gulffireshield.app'
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName '1.0'
+              }
+          }
+          EOT
+          cat > android/app/src/main/AndroidManifest.xml <<'EOT'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application android:label="Gulf Fire Shield" android:theme="@android:style/Theme.Material.Light.NoActionBar">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN"/>
+                          <category android:name="android.intent.category.LAUNCHER"/>
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOT
+          cat > android/app/src/main/java/com/gulffireshield/app/MainActivity.java <<'EOT'
+          package com.gulffireshield.app;
+          import android.app.Activity;
+          import android.os.Bundle;
+          import android.webkit.WebView;
+          public class MainActivity extends Activity {
+              WebView w;
+              @Override protected void onCreate(Bundle b) {
+                  super.onCreate(b);
+                  w = new WebView(this);
+                  w.getSettings().setJavaScriptEnabled(true);
+                  w.getSettings().setDomStorageEnabled(true);
+                  setContentView(w);
+                  w.loadUrl("file:///android_asset/index.html");
+              }
+              @Override public void onBackPressed() {
+                  if (w.canGoBack()) w.goBack(); else super.onBackPressed();
+              }
+          }
+          EOT
+      - name: Build
+        working-directory: android
+        run: gradle assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GulfFireShield-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
